@@ -27,41 +27,77 @@ def cargar_parametros():
     # Conjunto de estaciones (E) y tipos de vehículos (V)
     E = sorted(carab_df["id_estacion"].unique().tolist())
     V = [1, 2, 3, 4, 5, 6]
-    T = list(range(365))  # Días
+    T = list(range(1, 366))  # Días del 1 al 365 según documentación
     M = [1, 2, 3]  # Turnos
 
-    # Construir alpha: a qué estación pertenece cada patrulla
+    # Construir alpha: parámetro binario que indica si el vehículo p pertenece a la estación e
     alpha = {(row["id"], row["id_estacion"]): 1 for _, row in vehiculos_df.iterrows()}
 
-    # Construir w[p, e, v]: si la patrulla p de estación e es del tipo de vehículo v
+    # Construir w[p,v]: parámetro binario que indica si el vehículo p es de tipo v
     w = {}
     for _, row in vehiculos_df.iterrows():
         p = row["id"]
-        e = row["id_estacion"]
         v = row["tipo_medio"]
-        w[(p, e, v)] = 1
+        w[(p, v)] = 1
 
-    # Cargar costos de uso de vehículos
+    # Cargar costos de uso de vehículos O[v,t]
     costos_df = pd.read_csv("data/costos_diarios.csv")
     O = {}
     for _, row in costos_df.iterrows():
         t = row["Dia"]
-        for v, col in zip([1, 2, 3, 4, 5, 6], 
-                          ["Costo_uso_peaton", "Costo_uso_moto", "Costo_uso_bici", 
-                           "Costo_uso_caballo", "Costo_uso_auto", "Costo_uso_furgon"]):
-            for p in P:
-                O[(p, v, t)] = row[col]
+        costos_por_tipo = {
+            1: row["Costo_uso_peaton"],
+            2: row["Costo_uso_moto"], 
+            3: row["Costo_uso_bici"],
+            4: row["Costo_uso_caballo"], 
+            5: row["Costo_uso_auto"], 
+            6: row["Costo_uso_furgon"]
+        }
+        for v in V:
+            O[(v, t)] = costos_por_tipo[v]
 
-    # Presupuesto por estación (ficticio, puedes ajustar con archivo si tienes)
-    P_e = {e: 1000 for e in E}
+    # Cargar presupuesto por estación desde comisarias.csv
+    comisarias_df = pd.read_csv("data/comisarias.csv")
+    # Mapear IDs de comisaria (1-66) a IDs de estación (0-65)
+    P_e = {}
+    for _, row in comisarias_df.iterrows():
+        estacion_id = row["id_comisaria"] - 1  # Convertir de 1-66 a 0-65
+        P_e[estacion_id] = row["presupuesto_anual"]
 
-    # Compatibilidad vehículo-zona (puedes cargar desde CSV más adelante)
-    r = {(v, z): 1 for v in V for z in Z}
+    # Compatibilidad vehículo-zona r[v,z]
+    r = {}
+    vehiculo_cols = {
+        2: "compatible_moto",
+        3: "compatible_bici",
+        4: "compatible_caballo",
+        5: "compatible_auto",
+        6: "compatible_furgon"
+    }
+    for _, row in zonas_df.iterrows():
+        z = row["id_zona"]
+        for v in V:
+            if v == 1:
+                r[(v, z)] = 1  # peatón compatible en todas las zonas
+            else:
+                r[(v, z)] = row[vehiculo_cols[v]]
 
-    # Peligrosidad inicial
-    zeta = {(z, t): 0.5 for z in Z for t in T}
+    # Calcular Gamma según la documentación: máximo de peligrosidad teórica entre todas las zonas
+    Gamma = 0
+    for z in Z:
+        peligrosidad_zona = sum(I.get((d, z), 0) * IDD[d] for d in D)
+        if peligrosidad_zona > Gamma:
+            Gamma = peligrosidad_zona
+    
+    # Evitar división por cero
+    if Gamma == 0:
+        Gamma = 1.0
 
-    # Capacidad máxima por tipo de vehículo
+    # Peligrosidad inicial zeta[z,1] para cada zona
+    zeta = {}
+    for z in Z:
+        zeta[z] = 0.5  # Valor inicial según documentación
+
+    # Capacidad máxima por tipo de vehículo R_v
     R_v = {
         1: 1,  # peatón
         2: 1,  # moto
@@ -71,14 +107,14 @@ def cargar_parametros():
         6: 7   # furgón
     }
 
-    # Parámetros escalares
-    gamma = 1.0
-    lambda_ = 0.1
-    N = {(0, 0): 1}  # Puedes eliminar si no se usa en el modelo
+    # Parámetros escalares según documentación
+    lambda_ = 0.1  # Sensibilidad del aumento de peligrosidad (entre 0 y 1)
+    kappa = 1.0    # Parámetro que traduce peligrosidad en número de patrullas requeridas
+    M_big = 1000   # Número muy grande para restricciones de activación
 
     return {
         "C": C, "P": P, "E": E, "V": V, "Z": Z, "T": T, "M": M, "D": D,
-        "q": q, "I": I, "IDD": IDD, "O": O, "N": N, "P_e": P_e,
+        "q": q, "I": I, "IDD": IDD, "O": O, "P_e": P_e,
         "r": r, "w": w, "zeta": zeta, "beta": beta, "R_v": R_v,
-        "alpha": alpha, "gamma": gamma, "lambda": lambda_
+        "alpha": alpha, "Gamma": Gamma, "lambda": lambda_, "kappa": kappa, "M_big": M_big
     }
