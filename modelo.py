@@ -5,7 +5,10 @@ def construir_modelo(parametros):
     C, P, E, V, Z, T, M, D = parametros["C"], parametros["P"], parametros["E"], parametros["V"], parametros["Z"], parametros["T"], parametros["M"], parametros["D"]
     q, I, IDD = parametros["q"], parametros["I"], parametros["IDD"]
     O, N, C_e, P_e = parametros["O"], parametros["N"], parametros["C_e"], parametros["P_e"]
-    r, w, zeta, beta, R_v = parametros["r"], parametros["w"], parametros["zeta"], parametros["beta"], parametros["R_v"]
+    r, w, zeta_init, beta, R_v = parametros["r"], parametros["w"], parametros["zeta"], parametros["beta"], parametros["R_v"]
+    alpha = parametros["alpha"]
+    Gamma = parametros["gamma"]
+    lambda_ = parametros["lambda"]
 
     model = Model("Patrullaje Preventivo")
     model.setParam("OutputFlag", 1)
@@ -14,13 +17,21 @@ def construir_modelo(parametros):
     x = model.addVars(P, V, Z, M, T, vtype=GRB.BINARY, name="x")
     y = model.addVars(C, P, M, T, vtype=GRB.BINARY, name="y")
     phi = model.addVars(P, V, T, vtype=GRB.BINARY, name="phi")
+    u = model.addVars(Z, M, T, lb=0.0, vtype=GRB.CONTINUOUS, name="u")
+    zeta = model.addVars(Z, T, lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS, name="zeta")
 
-    # Función objetivo
+    # Set valores iniciales para peligrosidad
+    for z in Z:
+        for t in T:
+            zeta[z, t].start = zeta_init.get((z, t), 0.5)
+
+    # Función objetivo: maximizar cobertura ponderada por daño del delito
     model.setObjective(
-        quicksum(x[p, v, z, m, t] * sum(I[d, z] * IDD[d] for d in D)
-                 for p in P for v in V for z in Z for m in M for t in T),
+        quicksum(x[p, v, z, m, t] * sum(I.get((d, z), 0) * IDD[d] for d in D)
+                for p in P for v in V for z in Z for m in M for t in T),
         GRB.MAXIMIZE
     )
+
 
     # R1: Un turno máximo diario por carabinero
     model.addConstrs(
@@ -38,9 +49,9 @@ def construir_modelo(parametros):
 
     # R3: Solo carabineros de su estación
     model.addConstrs(
-        (y[c, p, m, t] <= quicksum(beta[c, e] * w.get((p, e, v), 0) for e in E for v in V)
+        (y[c, p, m, t] <= sum(beta[c, e] * alpha.get((p, e), 0) for e in E)
          for c in C for p in P for m in M for t in T),
-        name="R3_zona_carabinero"
+        name="R3_compatibilidad_estacion"
     )
 
     # R4: Límite mínimo de carabineros por patrulla
@@ -64,53 +75,53 @@ def construir_modelo(parametros):
         name="R6_experiencia"
     )
 
-    # R7: Asignación mínima por peligrosidad
+    # R7: Cobertura mínima por zona (permite déficit u)
     model.addConstrs(
-        (quicksum(x[p, v, z, m, t] for p in P for v in V) >= 4 * zeta[z] + (1 + zeta[z])
+        (quicksum(x[p, v, z, m, t] for p in P for v in V) + u[z, m, t] >= 1
          for z in Z for m in M for t in T),
-        name="R7_min_peligrosidad"
+        name="R7_cobertura_min"
     )
 
-    # R8: Límite patrullas disponibles
+    # R8: Actualización de peligrosidad
     model.addConstrs(
-        (quicksum(w.get((p, e, v), 0) * x[p, v, z, m, t] for p in P for z in Z) <= N.get((e, v), 0)
-         for e in E for v in V for m in M for t in T),
-        name="R8_patru_disponibles"
+        (zeta[z, t+1] >= zeta[z, t] + lambda_ * u[z, m, t] * 
+        (sum(I.get((d, z), 0) * IDD[d] for d in D) / Gamma)
+        for z in Z for t in range(len(T)-1) for m in M),
+        name="R8_peligrosidad"
     )
 
-    # R9: Asignación única de patrulla por turno
+    # R9: Compatibilidad patrulla-zona
+    model.addConstrs(
+        (x[p, v, z, m, t] <= r.get((v, z), 0)
+         for p in P for v in V for z in Z for m in M for t in T),
+        name="R9_compatibilidad"
+    )
+
+    # R10: Asignación única por patrulla en cada turno
     model.addConstrs(
         (quicksum(x[p, v, z, m, t] for z in Z) <= 1
          for p in P for v in V for m in M for t in T),
-        name="R9_una_zona_por_turno"
+        name="R10_asignacion_unica"
     )
 
-    # R10: Activación de phi
+    # R11: Activación de vehículo si es usado
     model.addConstrs(
         (quicksum(x[p, v, z, m, t] for z in Z for m in M) <= phi[p, v, t]
          for p in P for v in V for t in T),
-        name="R10_phi_activado"
+        name="R11_phi_activado"
     )
-
     model.addConstrs(
         (phi[p, v, t] <= quicksum(x[p, v, z, m, t] for z in Z for m in M)
          for p in P for v in V for t in T),
-        name="R10_phi_vinculo"
+        name="R11_phi_vinculo"
     )
 
-    # R11: Presupuesto por estación
+    # R12: Límite presupuestario por estación
     model.addConstrs(
-        (quicksum(phi[p, v, t] * O[p, v, t] * w.get((p, e, v), 0)
+        (quicksum(phi[p, v, t] * O.get((p, v, t), 0) * w.get((p, e, v), 0)
                   for p in P for v in V for t in T) <= P_e[e]
          for e in E),
-        name="R11_presupuesto"
-    )
-
-    # R12: Compatibilidad patrulla-zona
-    model.addConstrs(
-        (x[p, v, z, m, t] <= r[v, z]
-         for p in P for v in V for z in Z for m in M for t in T),
-        name="R12_compatibilidad"
+        name="R12_presupuesto"
     )
 
     return model
