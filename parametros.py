@@ -28,13 +28,20 @@ def cargar_parametros():
     lambda_ = 0.1
     O = {(0, 0, 0): 100}
     N = {(0, 0): 1}
-    C_e = {0: 2}
-    P_e = {0: 1000}
+    C_e = {e: 5 for e in E}
+    P_e = {e: 1000 for e in E}
     r = {(0, z): 1 for z in Z}
     w = {(0, 0, 0): 1}
     alpha = {(0, 0): 1}
-    beta = {(0, 0): 1, (1, 0): 1}
-    R_v = {0: 2}
+    beta = {(c, e): 1 for c in C for e in E}
+    R_v = {
+    1: 1,  # peatón: 1 carabinero
+    2: 1,  # moto: 1 carabinero
+    3: 1,  # bici: 1 carabinero
+    4: 2,  # caballo: 2 carabineros
+    5: 4,  # auto: 4 carabineros
+    6: 7   # furgón: hasta 4 carabineros
+    }   
     zeta = {(z, t): 0.5 for z in Z for t in T}
 
     return {
