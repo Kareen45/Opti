@@ -15,12 +15,12 @@ def cargar_parametros():
     I = {(row["id_delito"], row["id_zona"]): row["incidencia"] for _, row in incidencia_df.iterrows()}
 
     # Conjuntos 
-    C = [0, 1]  # carabineros
-    P = [0]
+    C = [0, 1]  # Cant carabineros
+    P = [0] # Cant vehículos
     E = list(range(66)) # 66 estaciones/comisarías numeradas del 0 al 65
     V = [1, 2, 3, 4, 5, 6]  # Tipo de vehículo:  1:peaton, 2:moto, 3:bici, 4:caballo, 5:auto, 6:furgón
-    T = [0, 1]         # días
-    M = [0]            # turnos
+    T = list(range(365))  # días del 0 al 364
+    M = [1, 2, 3]  # turnos diarios de 8 hrs
 
     # Parámetros
     q = {0: 2, 1: 2}
