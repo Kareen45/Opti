@@ -1,8 +1,11 @@
 # Opti
 
-carabineros.csv: id_carabinero,experiencia,estacion
+✅carabineros.csv: id_carabinero,experiencia,id_estacion
+- 20 carabineros x cada comisaría (son 66)
+- Se usan 1320 carabineros en total
 
-vehiculos.csv: id_vehiculo,tipo,estacion
+✅comisarias.csv: id_comisaria,id_zona,numero_carabineros,numero_motos,numero_bicis,numero_caballos,numero_autos,numero_furgon,presupuesto_anual
+- 
 
 ✅zonas.csv: id_zona, nombre_zona
 - Corresponden a las comunas de Santiago
@@ -18,18 +21,8 @@ vehiculos.csv: id_vehiculo,tipo,estacion
 - Para cada comuna se guardan los casos por delito
 - El índice de incidencia se calcula dividiendo los casos del delito x en los casos totales
 
-compatibilidad_vehiculo_zona.csv: tipo_vehiculo,id_zona,compatible
+costos_diarios.csv: Dia,Costo_uso_peaton,Costo_uso_moto,Costo_uso_bici,Costo_uso_caballo,Costo_uso_auto,Costo_uso_furgon
 
-costo_vehiculo.csv: id_vehiculo,tipo_vehiculo,dia,costo
-
-presupuesto_estacion.csv: estacion,presupuesto
-
-max_patrullas.csv: estacion,tipo_vehiculo,max_pat
-
-capacidad_vehiculo.csv: tipo_vehiculo,capacidad
-
-zeta_inicial.csv: id_zona,dia,zeta
-
-
+vehiculos.csv: id,tipo_medio,id_estacion
 
 

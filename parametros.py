@@ -14,39 +14,71 @@ def cargar_parametros():
     incidencia_df = pd.read_csv("data/incidencia_delito.csv")
     I = {(row["id_delito"], row["id_zona"]): row["incidencia"] for _, row in incidencia_df.iterrows()}
 
-    # Conjuntos 
-    C = [0, 1]  # Cant carabineros
-    P = [0] # Cant vehículos
-    E = list(range(66)) # 66 estaciones/comisarías numeradas del 0 al 65
-    V = [1, 2, 3, 4, 5, 6]  # Tipo de vehículo:  1:peaton, 2:moto, 3:bici, 4:caballo, 5:auto, 6:furgón
-    T = list(range(365))  # días del 0 al 364
-    M = [1, 2, 3]  # turnos diarios de 8 hrs
+    # Cargar carabineros
+    carab_df = pd.read_csv("data/carabineros.csv")
+    C = carab_df["id_carabinero"].tolist()
+    q = dict(zip(carab_df["id_carabinero"], carab_df["experiencia"]))
+    beta = {(row["id_carabinero"], row["id_estacion"]): 1 for _, row in carab_df.iterrows()}
 
-    # Parámetros
-    q = {0: 2, 1: 2}
+    # Cargar vehículos/patrullas
+    vehiculos_df = pd.read_csv("data/vehiculos.csv")
+    P = vehiculos_df["id"].tolist()
+
+    # Conjunto de estaciones (E) y tipos de vehículos (V)
+    E = sorted(carab_df["id_estacion"].unique().tolist())
+    V = [1, 2, 3, 4, 5, 6]
+    T = list(range(365))  # Días
+    M = [1, 2, 3]  # Turnos
+
+    # Construir alpha: a qué estación pertenece cada patrulla
+    alpha = {(row["id"], row["id_estacion"]): 1 for _, row in vehiculos_df.iterrows()}
+
+    # Construir w[p, e, v]: si la patrulla p de estación e es del tipo de vehículo v
+    w = {}
+    for _, row in vehiculos_df.iterrows():
+        p = row["id"]
+        e = row["id_estacion"]
+        v = row["tipo_medio"]
+        w[(p, e, v)] = 1
+
+    # Cargar costos de uso de vehículos
+    costos_df = pd.read_csv("data/costos_diarios.csv")
+    O = {}
+    for _, row in costos_df.iterrows():
+        t = row["Dia"]
+        for v, col in zip([1, 2, 3, 4, 5, 6], 
+                          ["Costo_uso_peaton", "Costo_uso_moto", "Costo_uso_bici", 
+                           "Costo_uso_caballo", "Costo_uso_auto", "Costo_uso_furgon"]):
+            for p in P:
+                O[(p, v, t)] = row[col]
+
+    # Presupuesto por estación (ficticio, puedes ajustar con archivo si tienes)
+    P_e = {e: 1000 for e in E}
+
+    # Compatibilidad vehículo-zona (puedes cargar desde CSV más adelante)
+    r = {(v, z): 1 for v in V for z in Z}
+
+    # Peligrosidad inicial
+    zeta = {(z, t): 0.5 for z in Z for t in T}
+
+    # Capacidad máxima por tipo de vehículo
+    R_v = {
+        1: 1,  # peatón
+        2: 1,  # moto
+        3: 1,  # bici
+        4: 2,  # caballo
+        5: 4,  # auto
+        6: 7   # furgón
+    }
+
+    # Parámetros escalares
     gamma = 1.0
     lambda_ = 0.1
-    O = {(0, 0, 0): 100}
-    N = {(0, 0): 1}
-    C_e = {e: 5 for e in E}
-    P_e = {e: 1000 for e in E}
-    r = {(0, z): 1 for z in Z}
-    w = {(0, 0, 0): 1}
-    alpha = {(0, 0): 1}
-    beta = {(c, e): 1 for c in C for e in E}
-    R_v = {
-    1: 1,  # peatón: 1 carabinero
-    2: 1,  # moto: 1 carabinero
-    3: 1,  # bici: 1 carabinero
-    4: 2,  # caballo: 2 carabineros
-    5: 4,  # auto: 4 carabineros
-    6: 7   # furgón: hasta 4 carabineros
-    }   
-    zeta = {(z, t): 0.5 for z in Z for t in T}
+    N = {(0, 0): 1}  # Puedes eliminar si no se usa en el modelo
 
     return {
         "C": C, "P": P, "E": E, "V": V, "Z": Z, "T": T, "M": M, "D": D,
-        "q": q, "I": I, "IDD": IDD, "O": O, "N": N, "C_e": C_e, "P_e": P_e,
+        "q": q, "I": I, "IDD": IDD, "O": O, "N": N, "P_e": P_e,
         "r": r, "w": w, "zeta": zeta, "beta": beta, "R_v": R_v,
         "alpha": alpha, "gamma": gamma, "lambda": lambda_
     }

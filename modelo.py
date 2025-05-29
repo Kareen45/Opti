@@ -4,7 +4,7 @@ def construir_modelo(parametros):
     # Desempaquetar parámetros y conjuntos
     C, P, E, V, Z, T, M, D = parametros["C"], parametros["P"], parametros["E"], parametros["V"], parametros["Z"], parametros["T"], parametros["M"], parametros["D"]
     q, I, IDD = parametros["q"], parametros["I"], parametros["IDD"]
-    O, N, C_e, P_e = parametros["O"], parametros["N"], parametros["C_e"], parametros["P_e"]
+    O, N, P_e = parametros["O"], parametros["N"], parametros["P_e"]
     r, w, zeta_init, beta, R_v = parametros["r"], parametros["w"], parametros["zeta"], parametros["beta"], parametros["R_v"]
     alpha = parametros["alpha"]
     Gamma = parametros["gamma"]
@@ -40,19 +40,21 @@ def construir_modelo(parametros):
         name="R1_turno_max"
     )
 
-    # R2: Carabineros disponibles por estación
+    # R2: Asignación única por turno para carabinero
     model.addConstrs(
-        (quicksum(beta[c, e] * y[c, p, m, t] for c in C for p in P) <= C_e[e]
-         for e in E for m in M for t in T),
-        name="R2_lim_carabineros_estacion"
+        (quicksum(y[c, p, m, t] for p in P) <= 1
+        for c in C for m in M for t in T),
+        name="R2_asignacion_unica"
     )
 
     # R3: Solo carabineros de su estación
     model.addConstrs(
-        (y[c, p, m, t] <= sum(beta[c, e] * alpha.get((p, e), 0) for e in E)
-         for c in C for p in P for m in M for t in T),
-        name="R3_compatibilidad_estacion"
-    )
+    (
+        y[c, p, m, t] <= sum(beta.get((c, e), 0) * alpha.get((p, e), 0) for e in E)
+        for c in C for p in P for m in M for t in T
+    ),
+    name="R3_compatibilidad_estacion"
+    )   
 
     # R4: Límite mínimo de carabineros por patrulla
     model.addConstrs(
