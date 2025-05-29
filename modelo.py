@@ -14,7 +14,7 @@ def construir_modelo(parametros):
 
     model = Model("Patrullaje Preventivo")
     model.setParam("OutputFlag", 1)
-    model.setParam("TimeLimit", 3600)  # 1 hora máximo
+    model.setParam("TimeLimit", 300)  # 5 min máximo
 
     # Variables de decisión según documentación
     x = model.addVars(P, Z, M, T, vtype=GRB.BINARY, name="x")
