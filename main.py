@@ -10,8 +10,8 @@ if __name__ == "__main__":
     print("🚔 Iniciando optimización de patrullaje preventivo...")
     
     # Determinar modo de ejecución
-    modo_testing = True
-    horizonte = "testing"
+    modo_testing = False
+    horizonte = "mensual"
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "--testing":
@@ -29,9 +29,9 @@ if __name__ == "__main__":
             horizonte = "completo"
             print("🔥 MODO COMPLETO: Todos los datos + 365 días (⚠️ PUEDE TARDAR HORAS)")
     else:
-        print("🧪 MODO TESTING por defecto: Datos reducidos + 7 días (rápido y funcional)")
+        print("📅 MODO MENSUAL por defecto: Todos los datos + 30 días")
         print("   Opciones disponibles:")
-        print("   --testing  : Datos reducidos + 7 días (~110K variables - RECOMENDADO)")
+        print("   --testing  : Datos reducidos + 7 días (~110K variables - RÁPIDO)")
         print("   --semanal  : Todos los datos + 7 días (~27M variables - LENTO)")
         print("   --mensual  : Todos los datos + 30 días (~115M variables - MUY LENTO)")
         print("   --completo : Todos los datos + 365 días (~1.4B variables - EXTREMO)")

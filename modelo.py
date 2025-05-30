@@ -19,11 +19,16 @@ def construir_modelo(parametros):
 
     model = Model("Patrullaje Preventivo")
     # logs
-    model.setParam("OutputFlag", 1)         # Ya lo tienes, deja esto activado
+    model.setParam("OutputFlag", 1)         
     model.setParam("LogToConsole", 1)       # Asegura que imprime en consola
     model.setParam("DisplayInterval", 10)   # Muestra progreso cada 10s
 
-    model.setParam("TimeLimit", 300)  # 5 min máximo
+    model.setParam("TimeLimit", 1800)  # 30 min máximo según requisitos del proyecto
+    
+    # Configuraciones para reducir uso de memoria
+    model.setParam("NodefileStart", 0.5)  # Usar disco cuando memoria > 0.5 GB
+    model.setParam("MemLimit", 8)  # Límite de memoria en GB
+    model.setParam("Presolve", 2)  # Presolve agresivo para reducir variables
 
     print("✅ Creando variables de decisión...")
     # Variables de decisión según documentación
