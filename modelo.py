@@ -151,21 +151,47 @@ def construir_modelo(parametros):
         name="R11_limite_presupuestario"
     )
 
-    # R12: Cobertura mínima con penalización por déficit
+    # R12: Cobertura mínima DIARIA OBLIGATORIA - TODOS LOS DÍAS
     print("   🔄 R12: Cobertura mínima...")
+    
+    # CAMBIO CLAVE: Requerir patrullaje mínimo CADA DÍA independientemente de peligrosidad
+    # Esto asegura que el modelo genere un plan mensual real
     model.addConstrs(
-        (quicksum(x[p, z, m, t] for p in P) + u[z, m, t] >= kappa * zeta[z, t-1]
-         for z in Z for m in M for t in T if t > 1),
-        name="R12_cobertura_minima_deficit"
+        (quicksum(x[p, z, m, t] for p in P for m in M) >= kappa
+         for z in Z for t in T),
+        name="R12_patrullaje_diario_obligatorio"
     )
 
-    # R13: Actualización de peligrosidad por déficit
+    # R13: Actualización de peligrosidad CON CRIMINALIDAD BASE DIARIA
     print("   🔄 R13: Actualización peligrosidad...")
+    
+    # Para el primer día, usar peligrosidad inicial
+    for z in Z:
+        peligrosidad_base = quicksum(I.get((d, z), 0) * IDD[d] for d in D)
+        cobertura_total = quicksum(x[p, z, m, 1] for p in P for m in M)
+        model.addConstr(
+            zeta[z, 1] == zeta_init[z] + lambda_ * peligrosidad_base - Gamma * cobertura_total/10,
+            name=f"R13_inicial_{z}"
+        )
+    
+    # Para días posteriores: criminalidad base diaria + evolución de peligrosidad
+    for z in Z:
+        for t in T:
+            if t > 1:
+                # CRIMINALIDAD BASE: Cada día aparece 20% de la criminalidad inicial
+                criminalidad_diaria = 0.2 * quicksum(I.get((d, z), 0) * IDD[d] for d in D)
+                cobertura_total = quicksum(x[p, z, m, t] for p in P for m in M)
+                
+                model.addConstr(
+                    zeta[z, t] == zeta[z, t-1] + criminalidad_diaria + lambda_ * quicksum(u[z, m, t-1] for m in M) - Gamma * cobertura_total/10,
+                    name=f"R13_dinamica_{z}_{t}"
+                )
+    
+    # Restricción adicional: Déficit siempre positivo (nunca perfectamente 0)
     model.addConstrs(
-        (zeta[z, t+1] == zeta[z, t] + lambda_ * quicksum(u[z, m, t] for m in M) * 
-         (quicksum(I.get((d, z), 0) * IDD[d] for d in D) / Gamma)
-         for z in Z for t in T if t < max(T)),
-        name="R13_actualizacion_peligrosidad"
+        (u[z, m, t] >= 0.01 * zeta_init[z] - quicksum(x[p, z, m, t] for p in P)
+         for z in Z for m in M for t in T),
+        name="R14_deficit_minimo"
     )
 
     print("✅ Modelo construido exitosamente!")

@@ -1,6 +1,6 @@
 import pandas as pd
 
-def cargar_parametros(modo_testing=True, horizonte="testing"):
+def cargar_parametros(modo_testing=True, horizonte="mensual"):
     """
     Cargar parámetros del modelo
     
@@ -12,10 +12,17 @@ def cargar_parametros(modo_testing=True, horizonte="testing"):
     zonas_df = pd.read_csv("data/zonas.csv")
     Z = zonas_df["id_zona"].tolist()
     
-    if modo_testing:
-        # MODO TESTING: Reducir drasticamente el tamaño
-        Z = Z[:5]  # Solo 5 zonas
-        print(f"🧪 MODO TESTING: Usando solo {len(Z)} zonas")
+    if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
+        # MODO TESTING/5 ZONAS/10 ZONAS: Reducir zonas
+        if modo_testing == True:
+            Z = Z[:1]  # Solo 1 zona para testing
+            print(f"🧪 MODO TESTING: Usando solo {len(Z)} zona(s)")
+        elif modo_testing == "cinco_zonas":
+            Z = Z[:5]  # Solo 5 zonas
+            print(f"📊 MODO 5 ZONAS: Usando {len(Z)} zonas")
+        else:  # diez_zonas
+            Z = Z[:10]  # Solo 10 zonas
+            print(f"📊 MODO 10 ZONAS: Usando {len(Z)} zonas")
 
     # Cargar tipos de delitos (D, IDD)
     delitos_df = pd.read_csv("data/tipos_delitos.csv")
@@ -34,22 +41,36 @@ def cargar_parametros(modo_testing=True, horizonte="testing"):
     q = dict(zip(carab_df["id_carabinero"], carab_df["experiencia"]))
     beta = {(row["id_carabinero"], row["id_estacion"]): 1 for _, row in carab_df.iterrows()}
     
-    if modo_testing:
-        # MODO TESTING: Reducir carabineros
-        C = C[:100]  # Solo 100 carabineros
+    if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
+        # MODO TESTING/5 ZONAS/10 ZONAS: Reducir carabineros
+        if modo_testing == True:
+            C = C[:100]  # Solo 100 carabineros para testing
+            print(f"🧪 MODO TESTING: Usando solo {len(C)} carabineros")
+        elif modo_testing == "cinco_zonas":
+            C = C[:200]  # Carabineros para 5 zonas
+            print(f"📊 MODO 5 ZONAS: Usando {len(C)} carabineros")
+        else:  # diez_zonas
+            C = C[:300]  # Más carabineros para 10 zonas
+            print(f"📊 MODO 10 ZONAS: Usando {len(C)} carabineros")
         q = {c: q[c] for c in C}
         beta = {(c, e): v for (c, e), v in beta.items() if c in C}
-        print(f"🧪 MODO TESTING: Usando solo {len(C)} carabineros")
 
     # Cargar vehículos/patrullas
     vehiculos_df = pd.read_csv("data/vehiculos.csv")
     P = vehiculos_df["id"].tolist()
     
-    if modo_testing:
-        # MODO TESTING: Reducir vehículos
-        P = P[:50]  # Solo 50 vehículos
+    if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
+        # MODO TESTING/5 ZONAS/10 ZONAS: Reducir vehículos
+        if modo_testing == True:
+            P = P[:50]  # Solo 50 vehículos para testing
+            print(f"🧪 MODO TESTING: Usando solo {len(P)} vehículos")
+        elif modo_testing == "cinco_zonas":
+            P = P[:120]  # Vehículos para 5 zonas
+            print(f"📊 MODO 5 ZONAS: Usando {len(P)} vehículos")
+        else:  # diez_zonas
+            P = P[:200]  # Más vehículos para 10 zonas
+            print(f"📊 MODO 10 ZONAS: Usando {len(P)} vehículos")
         vehiculos_df = vehiculos_df[vehiculos_df["id"].isin(P)]
-        print(f"🧪 MODO TESTING: Usando solo {len(P)} vehículos")
 
     # Conjunto de estaciones (E) y tipos de vehículos (V)
     E = sorted(carab_df["id_estacion"].unique().tolist())
@@ -110,9 +131,15 @@ def cargar_parametros(modo_testing=True, horizonte="testing"):
     P_e = {}
     for _, row in comisarias_df.iterrows():
         estacion_id = row["id_comisaria"] - 1  # Convertir de 1-66 a 0-65
-        if modo_testing:
-            # En modo testing, aumentar presupuesto para evitar infactibilidad
-            P_e[estacion_id] = row["presupuesto_anual"] * 10
+        if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
+            # En modo testing/5 zonas/10 zonas, aumentar presupuesto para evitar infactibilidad
+            if modo_testing == True:
+                multiplicador = 10
+            elif modo_testing == "cinco_zonas":
+                multiplicador = 7
+            else:  # diez_zonas
+                multiplicador = 5
+            P_e[estacion_id] = row["presupuesto_anual"] * multiplicador
         else:
             P_e[estacion_id] = row["presupuesto_anual"]
 
@@ -145,10 +172,17 @@ def cargar_parametros(modo_testing=True, horizonte="testing"):
     if Gamma == 0:
         Gamma = 1.0
 
-    # Peligrosidad inicial zeta[z,1] para cada zona
+    # Peligrosidad inicial zeta[z,1] para cada zona SIN normalizar por Gamma
+    # Esto hace que zonas más peligrosas requieran proporcionalmente más patrullas
     zeta = {}
     for z in Z:
-        zeta[z] = 0.5  # Valor inicial según documentación
+        total = 0
+        for d in D:
+            incidencia = I.get((d, z), 0)   # Puede ser 0 si no hay datos para (d,z)
+            daño = IDD.get(d, 0)            # Índice de daño del delito
+            total += incidencia * daño
+        # NO normalizar por Gamma - usar valor absoluto para reflejar peligrosidad real
+        zeta[z] = max(total, 0.05)  # Mínimo 0.05 para evitar zonas con 0 peligrosidad
 
     # Capacidad máxima por tipo de vehículo R_v
     R_v = {
@@ -161,12 +195,18 @@ def cargar_parametros(modo_testing=True, horizonte="testing"):
     }
 
     # Parámetros escalares según documentación
-    lambda_ = 0.1  # Sensibilidad del aumento de peligrosidad (entre 0 y 1)
+    lambda_ = 0.6  # Mayor sensibilidad al aumento de peligrosidad para modelo dinámico
     
-    if modo_testing:
-        kappa = 0.5    # Reducir requerimiento de patrullas en testing
+    if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
+        # Reducir kappa para hacer el modelo más dinámico
+        if modo_testing == True:
+            kappa = 8.0   # Reducido para requerir más optimización diaria
+        elif modo_testing == "cinco_zonas":
+            kappa = 5.0   # Mucho más restrictivo para 5 zonas
+        else:  # diez_zonas
+            kappa = 15.0  # Para 10 zonas
     else:
-        kappa = 1.0    # Parámetro que traduce peligrosidad en número de patrullas requeridas
+        kappa = 30.0    # Muchas patrullas para modelo completo
         
     M_big = 1000   # Número muy grande para restricciones de activación
 

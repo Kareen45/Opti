@@ -10,7 +10,7 @@ if __name__ == "__main__":
     print("🚔 Iniciando optimización de patrullaje preventivo...")
     
     # Determinar modo de ejecución
-    modo_testing = False
+    modo_testing = True  # Cambio por defecto a True para usar solo 1 zona
     horizonte = "mensual"
     
     if len(sys.argv) > 1:
@@ -18,23 +18,35 @@ if __name__ == "__main__":
             modo_testing = True
             horizonte = "testing"
             print("🧪 MODO TESTING: Datos reducidos + 7 días")
+        elif sys.argv[1] == "--diez-zonas":
+            modo_testing = "diez_zonas"  # Nuevo modo especial
+            horizonte = "mensual"
+            print("📊 MODO 10 ZONAS: 10 zonas + 30 días (~medio millón variables)")
+        elif sys.argv[1] == "--cinco-zonas":
+            modo_testing = "cinco_zonas"  # Nuevo modo intermedio
+            horizonte = "mensual"
+            print("📊 MODO 5 ZONAS: 5 zonas + 30 días (~250K variables - INTERMEDIO)")
         elif sys.argv[1] == "--semanal":
             modo_testing = False
             horizonte = "semanal"
             print("📅 MODO SEMANAL: Todos los datos + 7 días (⚠️ PUEDE TARDAR MUCHO)")
         elif sys.argv[1] == "--mensual":
+            modo_testing = False  # Mensual completo con todas las zonas
             horizonte = "mensual"
             print("📅 MODO MENSUAL: Todos los datos + 30 días (⚠️ MUY LENTO)")
         elif sys.argv[1] == "--completo":
+            modo_testing = False
             horizonte = "completo"
             print("🔥 MODO COMPLETO: Todos los datos + 365 días (⚠️ PUEDE TARDAR HORAS)")
     else:
-        print("📅 MODO MENSUAL por defecto: Todos los datos + 30 días")
+        print("📅 MODO TESTING MENSUAL por defecto: 1 zona + 30 días")
         print("   Opciones disponibles:")
-        print("   --testing  : Datos reducidos + 7 días (~110K variables - RÁPIDO)")
-        print("   --semanal  : Todos los datos + 7 días (~27M variables - LENTO)")
-        print("   --mensual  : Todos los datos + 30 días (~115M variables - MUY LENTO)")
-        print("   --completo : Todos los datos + 365 días (~1.4B variables - EXTREMO)")
+        print("   --testing    : 1 zona + 7 días (~3K variables - MUY RÁPIDO)")
+        print("   --cinco-zonas: 5 zonas + 30 días (~250K variables - INTERMEDIO)")
+        print("   --diez-zonas : 10 zonas + 30 días (~500K variables - RÁPIDO)")
+        print("   --semanal    : Todas las zonas + 7 días (~27M variables - LENTO)")
+        print("   --mensual    : Todas las zonas + 30 días (~115M variables - MUY LENTO)")
+        print("   --completo   : Todas las zonas + 365 días (~1.4B variables - EXTREMO)")
     
     # Cargar parámetros
     print("📊 Cargando parámetros...")
@@ -53,12 +65,40 @@ if __name__ == "__main__":
         print("\n📋 Guardando variables activas...")
 
         variables_activas = []
+        total_variables = 0
+        variables_cero = 0
 
         for var in modelo.getVars():
-            if var.X > 1e-5:
+            total_variables += 1
+            if abs(var.X) < 1e-10:
+                variables_cero += 1
+            elif var.X > 1e-10:  # Bajo el umbral de 1e-5 a 1e-10
                 nombre = var.VarName
                 valor = var.X
                 variables_activas.append((nombre, valor))
+
+        print(f"📊 Estadísticas de variables:")
+        print(f"   • Total de variables: {total_variables}")
+        print(f"   • Variables = 0: {variables_cero}")
+        print(f"   • Variables activas (>{1e-10}): {len(variables_activas)}")
+        
+        # Si no hay variables activas, mostrar algunas variables con valores más pequeños
+        if len(variables_activas) == 0:
+            print("⚠️  No hay variables activas. Mostrando variables con valores más altos:")
+            variables_no_cero = []
+            for var in modelo.getVars():
+                if var.X != 0:
+                    variables_no_cero.append((var.VarName, var.X))
+            
+            # Ordenar por valor absoluto descendente
+            variables_no_cero.sort(key=lambda x: abs(x[1]), reverse=True)
+            
+            for i, (nombre, valor) in enumerate(variables_no_cero[:20]):
+                print(f"      {nombre} = {valor}")
+            
+            # Usar un umbral aún más bajo
+            variables_activas = [(n, v) for n, v in variables_no_cero if abs(v) > 1e-15]
+            print(f"   • Usando umbral 1e-15: {len(variables_activas)} variables")
 
         # Guardar todas las variables activas en Excel
         df_vars = pd.DataFrame(variables_activas, columns=["variable", "valor"])
