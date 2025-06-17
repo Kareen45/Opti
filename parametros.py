@@ -13,16 +13,18 @@ def cargar_parametros(modo_testing=True, horizonte="mensual"):
     Z = zonas_df["id_zona"].tolist()
     
     if modo_testing == True or modo_testing == "diez_zonas" or modo_testing == "cinco_zonas":
-        # MODO TESTING/5 ZONAS/10 ZONAS: Reducir zonas
+        # MODO TESTING/5 ZONAS/10 ZONAS: Usar zonas representativas por peligrosidad
         if modo_testing == True:
             Z = Z[:1]  # Solo 1 zona para testing
             print(f"🧪 MODO TESTING: Usando solo {len(Z)} zona(s)")
         elif modo_testing == "cinco_zonas":
-            Z = Z[:5]  # Solo 5 zonas
-            print(f"📊 MODO 5 ZONAS: Usando {len(Z)} zonas")
+            # Top 5 más peligrosas: Santiago, Maipú, La Florida, Providencia, Estación Central
+            Z = [30, 17, 8, 21, 4]
+            print(f"📊 MODO 5 ZONAS: Usando {len(Z)} zonas más peligrosas: Santiago, Maipú, La Florida, Providencia, Estación Central")
         else:  # diez_zonas
-            Z = Z[:10]  # Solo 10 zonas
-            print(f"📊 MODO 10 ZONAS: Usando {len(Z)} zonas")
+            # 10 comunas balanceadas: 3 alta + 4 media + 3 baja peligrosidad
+            Z = [30, 17, 8, 23, 24, 28, 26, 31, 0, 15]
+            print(f"📊 MODO 10 ZONAS: Usando {len(Z)} zonas balanceadas (alta/media/baja peligrosidad)")
 
     # Cargar tipos de delitos (D, IDD)
     delitos_df = pd.read_csv("data/tipos_delitos.csv")
