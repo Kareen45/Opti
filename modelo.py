@@ -42,10 +42,10 @@ def construir_modelo(parametros):
     print(f"   ✓ Variable phi: {len(P)*len(T)} variables binarias")
     
     u = model.addVars(Z, M, T, lb=0.0, vtype=GRB.CONTINUOUS, name="u")
-    print(f"   ✓ Variable u: {len(Z)*len(M)*len(T)} variables continuas")
+    print(f"   ✓ Variable u: {len(Z)*len(M)*len(T)} variables continuas (peligrosidad por turno)")
     
     zeta = model.addVars(Z, T, lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS, name="zeta")
-    print(f"   ✓ Variable zeta: {len(Z)*len(T)} variables continuas")
+    print(f"   ✓ Variable zeta: {len(Z)*len(T)} variables continuas (peligrosidad diaria [0,1])")
 
     # Establecer valores iniciales de peligrosidad
     print("✅ Estableciendo valores iniciales...")
@@ -162,41 +162,59 @@ def construir_modelo(parametros):
         name="R12_patrullaje_diario_obligatorio"
     )
 
-    # R13: Actualización de peligrosidad CON CRIMINALIDAD BASE DIARIA
-    print("   🔄 R13: Actualización peligrosidad...")
+    # R13: Actualización dinámica de peligrosidad (según documentación)
+    print("   🔄 R13: Actualización dinámica de peligrosidad...")
     
-    # Para el primer día, usar peligrosidad inicial
+    # Para el primer día (t=1)
     for z in Z:
-        peligrosidad_base = quicksum(I.get((d, z), 0) * IDD[d] for d in D)
-        cobertura_total = quicksum(x[p, z, m, 1] for p in P for m in M)
+        criminalidad_base = quicksum(I.get((d, z), 0) * IDD[d] for d in D)
+        cobertura_zt = quicksum(x[p, z, m, 1] for p in P for m in M)
         model.addConstr(
-            zeta[z, 1] == zeta_init[z] + lambda_ * peligrosidad_base - Gamma * cobertura_total/10,
+            zeta[z, 1] == zeta_init[z] + lambda_ * criminalidad_base - (Gamma * cobertura_zt) / 10,
             name=f"R13_inicial_{z}"
         )
     
-    # Para días posteriores: criminalidad base diaria + evolución de peligrosidad
+    # Para días posteriores (t > 1)
     for z in Z:
         for t in T:
             if t > 1:
-                # CRIMINALIDAD BASE: Cada día aparece 20% de la criminalidad inicial
-                criminalidad_diaria = 0.2 * quicksum(I.get((d, z), 0) * IDD[d] for d in D)
-                cobertura_total = quicksum(x[p, z, m, t] for p in P for m in M)
+                criminalidad_base = quicksum(I.get((d, z), 0) * IDD[d] for d in D)
+                cobertura_zt = quicksum(x[p, z, m, t] for p in P for m in M)
+                sum_u_anterior = quicksum(u[z, m, t-1] for m in M)
                 
                 model.addConstr(
-                    zeta[z, t] == zeta[z, t-1] + criminalidad_diaria + lambda_ * quicksum(u[z, m, t-1] for m in M) - Gamma * cobertura_total/10,
+                    zeta[z, t] == zeta[z, t-1] + 0.2 * criminalidad_base + lambda_ * sum_u_anterior - (Gamma * cobertura_zt) / 10,
                     name=f"R13_dinamica_{z}_{t}"
                 )
     
-    # Restricción adicional: Déficit siempre positivo (nunca perfectamente 0)
-    model.addConstrs(
-        (u[z, m, t] >= 0.01 * zeta_init[z] - quicksum(x[p, z, m, t] for p in P)
-         for z in Z for m in M for t in T),
-        name="R14_deficit_minimo"
-    )
+    # R14: Definición de peligrosidad por turno
+    print("   🔄 R14: Definición de peligrosidad por turno...")
+    
+    # u[z,m,t] representa el déficit de peligrosidad de la zona z en el turno m del día t
+    # Se define como la peligrosidad diaria distribuida por turnos menos la cobertura del turno
+    for z in Z:
+        for m in M:
+            for t in T:
+                cobertura_turno = quicksum(x[p, z, m, t] for p in P)
+                # Distribuir la peligrosidad diaria entre los 3 turnos y restar cobertura del turno
+                model.addConstr(
+                    u[z, m, t] >= (zeta[z, t] / 3) - cobertura_turno,
+                    name=f"R14_peligrosidad_turno_{z}_{m}_{t}"
+                )
+                # También asegurar que u no sea negativo cuando hay suficiente cobertura
+                model.addConstr(
+                    u[z, m, t] >= 0,
+                    name=f"R14_no_negativo_{z}_{m}_{t}"
+                )
 
     print("✅ Modelo construido exitosamente!")
     print(f"📊 Total variables: {model.NumVars}")
     print(f"📊 Total restricciones: {model.NumConstrs}")
+    print("🎯 MODELO ALINEADO CON DOCUMENTACIÓN OFICIAL:")
+    print("   • Variable u: Peligrosidad por turno (continua)")
+    print("   • Variable zeta: Peligrosidad diaria [0,1] (continua)")
+    print("   • R13: Actualización dinámica según ecuaciones documentadas")
+    print("   • R14: Definición explícita de peligrosidad por turno")
     return model
 
 def resolver_modelo(model):
